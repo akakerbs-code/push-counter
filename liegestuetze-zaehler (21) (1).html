@@ -1,0 +1,3153 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0a0a" />
+<title>PUSH · Liegestütze Zähler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0a0a0a;
+    --bg-2: #141414;
+    --bg-3: #1e1e1e;
+    --fg: #f5f5f5;
+    --muted: #888;
+    --accent: #d4ff00;
+    --accent-dim: #9fbf00;
+    --danger: #ff3d3d;
+    --success: #00e676;
+    --border: #2a2a2a;
+  }
+
+  /* Heller Modus */
+  body[data-theme="light"] {
+    --bg: #f5f5f5;
+    --bg-2: #ffffff;
+    --bg-3: #e8e8e8;
+    --fg: #0a0a0a;
+    --muted: #666;
+    --border: #d4d4d4;
+  }
+
+  /* Akzentfarben */
+  body[data-accent="blue"]   { --accent: #00d4ff; --accent-dim: #00a0bf; }
+  body[data-accent="red"]    { --accent: #ff3d5c; --accent-dim: #cc2040; }
+  body[data-accent="purple"] { --accent: #c77dff; --accent-dim: #9a4ddb; }
+  body[data-accent="orange"] { --accent: #ff9500; --accent-dim: #cc7300; }
+
+  /* Größere Schrift */
+  body.large-font { font-size: 17px; }
+  body.large-font .logo { font-size: 32px; }
+  body.large-font .count-value { font-size: 86px; }
+  body.large-font .stat-value { font-size: 52px; }
+  body.large-font .section-title { font-size: 20px; }
+  body.large-font .btn { font-size: 20px; }
+  body.large-font .goal-title { font-size: 18px; }
+  body.large-font .board-score { font-size: 28px; }
+  body.large-font #welcome-view h1 { font-size: 140px; }
+  body.large-font #start-go-btn { font-size: 26px; }
+  body.large-font .cam-status h2 { font-size: 28px; }
+  body.large-font .cam-status p { font-size: 16px; }
+  html, body {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(rgba(212,255,0,0.04) 1px, transparent 1px);
+    background-size: 20px 20px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .app {
+    position: relative;
+    height: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    z-index: 2;
+  }
+  header {
+    padding: 16px 20px 8px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: 'Anton', sans-serif;
+    font-size: 28px;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+  .logo span { color: var(--fg); }
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .settings-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+  }
+  .settings-btn:hover, .settings-btn:active {
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: rotate(60deg);
+  }
+  .settings-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+  .tagline {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+  }
+  .view { display: none; height: 100%; }
+  .view.active { display: flex; flex-direction: column; }
+
+  /* ===== CAMERA VIEW ===== */
+  #cam-view { padding: 0; }
+  .cam-wrap {
+    position: relative;
+    flex: 1;
+    background: #000;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #video { display: none; }
+  #canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* automatisch spiegeln */
+  }
+  .cam-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+  }
+  .count-badge {
+    align-self: flex-start;
+    background: rgba(10,10,10,0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 14px 20px;
+    min-width: 140px;
+  }
+  .count-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 2px;
+  }
+  .count-value {
+    font-family: 'Anton', sans-serif;
+    font-size: 72px;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 20px rgba(212,255,0,0.4);
+  }
+  .state-indicator {
+    align-self: flex-end;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .state-pill {
+    background: rgba(10,10,10,0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+  }
+  .state-pill.up { border-color: var(--accent); color: var(--accent); }
+  .state-pill.down { border-color: var(--danger); color: var(--danger); }
+  .angle-display {
+    background: rgba(10,10,10,0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .cam-status {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: var(--fg);
+    max-width: 80%;
+  }
+  .cam-status .loader {
+    width: 48px;
+    height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    margin: 0 auto 16px;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cam-status h2 {
+    font-family: 'Anton', sans-serif;
+    font-size: 24px;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .cam-status p { color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+  .controls {
+    padding: 16px 20px 20px;
+    display: flex;
+    gap: 12px;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+  .btn {
+    flex: 1;
+    padding: 16px;
+    border: none;
+    border-radius: 14px;
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn-primary:active { transform: scale(0.97); background: var(--accent-dim); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--bg-3);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+    padding: 16px 20px;
+  }
+  .btn-secondary:active { background: var(--bg-2); }
+  .btn-danger {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  /* ===== STATS VIEW ===== */
+  .stats-content { padding: 20px; overflow-y: auto; }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card.accent { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .stat-card.accent .stat-label { color: rgba(0,0,0,0.6); }
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: 'Anton', sans-serif;
+    font-size: 44px;
+    line-height: 1;
+  }
+  .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .stat-card.accent .stat-sub { color: rgba(0,0,0,0.6); }
+  .section-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1.5px;
+    margin: 24px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 18px;
+    background: var(--accent);
+  }
+  .chart-container {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    height: 240px;
+    position: relative;
+  }
+  .goal-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .goal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .goal-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 16px;
+    letter-spacing: 1px;
+  }
+  .goal-edit {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .progress-bar {
+    height: 10px;
+    background: var(--bg-3);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+    border-radius: 999px;
+    transition: width 0.4s ease;
+  }
+  .progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* ===== LEADERBOARD ===== */
+  .board-content { padding: 20px; overflow-y: auto; }
+  .board-notice {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .board-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .board-entry {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    gap: 14px;
+  }
+  .board-entry.self {
+    border-color: var(--accent);
+    background: linear-gradient(90deg, rgba(212,255,0,0.08), transparent);
+  }
+  .board-rank {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    min-width: 36px;
+    color: var(--muted);
+  }
+  .board-entry:nth-child(1) .board-rank { color: var(--accent); }
+  .board-entry:nth-child(2) .board-rank { color: #c0c0c0; }
+  .board-entry:nth-child(3) .board-rank { color: #cd7f32; }
+  .board-name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .board-self-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    background: var(--accent);
+    color: var(--bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    letter-spacing: 1px;
+  }
+  .board-score {
+    font-family: 'Anton', sans-serif;
+    font-size: 24px;
+    color: var(--accent);
+  }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--muted);
+  }
+  .empty-state h3 {
+    font-family: 'Anton', sans-serif;
+    font-size: 20px;
+    letter-spacing: 1.5px;
+    color: var(--fg);
+    margin-bottom: 8px;
+  }
+
+  /* ===== BOTTOM NAV ===== */
+  nav {
+    display: flex;
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+  }
+  .nav-btn {
+    flex: 1;
+    padding: 12px 8px 16px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.15s;
+    position: relative;
+  }
+  .nav-btn.active { color: var(--accent); }
+  .nav-btn.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 30px;
+    height: 2px;
+    background: var(--accent);
+  }
+  .nav-btn svg { width: 22px; height: 22px; stroke-width: 2; }
+
+  /* ===== MODAL ===== */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+  }
+  .modal-backdrop.active { display: flex; }
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .modal h2 {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .modal p {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 18px;
+    line-height: 1.5;
+  }
+  .modal input {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--fg);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    margin-bottom: 14px;
+  }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns .btn { font-size: 14px; padding: 12px; }
+
+  /* Einstellungs-Modal Sections */
+  .settings-section {
+    margin-bottom: 18px;
+  }
+  .settings-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .settings-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .chip {
+    flex: 1;
+    padding: 10px 14px;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--fg);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .color-dot {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid var(--bg-3);
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .color-dot.active {
+    border-color: var(--fg);
+    transform: scale(1.1);
+  }
+
+  /* ===== GROUPS VIEW (Phase 1: Grundstruktur) ===== */
+  .groups-content {
+    padding: 20px;
+    overflow-y: auto;
+  }
+  .groups-header {
+    margin-bottom: 20px;
+  }
+  .groups-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 24px;
+    letter-spacing: 1.5px;
+    margin-bottom: 4px;
+  }
+  .groups-subtitle {
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .group-actions {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .group-action-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 18px 12px;
+    background: var(--bg-2);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    color: var(--fg);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .group-action-btn:hover:not(:disabled),
+  .group-action-btn:active:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--bg-3);
+  }
+  .group-action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .group-action-btn.create .ga-icon { color: var(--accent); }
+  .group-action-btn .ga-icon {
+    font-family: 'Anton', sans-serif;
+    font-size: 28px;
+    line-height: 1;
+  }
+  .group-action-btn .ga-label {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .groups-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .group-code-display {
+    background: var(--bg-3);
+    border: 2px dashed var(--accent);
+    border-radius: 14px;
+    padding: 20px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 8px;
+    color: var(--accent);
+    margin-bottom: 14px;
+    -webkit-user-select: all;
+    user-select: all;
+  }
+
+  .group-card {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .group-card:hover, .group-card:active {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .group-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .group-card-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1px;
+    flex: 1;
+  }
+  .group-card-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--bg-3);
+    color: var(--muted);
+    padding: 3px 8px;
+    border-radius: 6px;
+    letter-spacing: 1.5px;
+  }
+  .group-card-meta {
+    display: flex;
+    gap: 14px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  /* Detail-Ansicht einer Gruppe */
+  .group-back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 0 14px 0;
+    transition: color 0.15s;
+  }
+  .group-back-btn:hover, .group-back-btn:active { color: var(--fg); }
+  .group-back-btn svg { width: 18px; height: 18px; }
+
+  .group-detail-header {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .group-detail-name {
+    font-family: 'Anton', sans-serif;
+    font-size: 26px;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+  .group-detail-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 6px;
+    color: var(--accent);
+    background: var(--bg-3);
+    padding: 10px 16px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 14px;
+    -webkit-user-select: all;
+    user-select: all;
+  }
+  .group-detail-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .level-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .level-option {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 14px;
+    row-gap: 2px;
+    align-items: center;
+    padding: 14px 16px;
+    background: var(--bg-3);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    color: var(--fg);
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .level-option:hover, .level-option:active {
+    border-color: var(--accent);
+    background: var(--bg-2);
+  }
+  .lvl-icon {
+    grid-row: 1 / span 2;
+    font-size: 32px;
+  }
+  .lvl-title {
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: var(--fg);
+  }
+  .lvl-desc {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.3;
+  }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--accent);
+    color: var(--bg);
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s;
+    z-index: 200;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @keyframes countPulse {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .count-value.pulse { animation: countPulse 0.35s ease; }
+
+  /* ===== POSITIONIER-HILFE (Zielkreise über der Kamera) ===== */
+  .pose-guide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0.7;
+    transition: opacity 0.4s ease;
+  }
+  /* Wenn in Position -> Overlay dezenter, bleibt aber sichtbar */
+  .pose-guide.in-position {
+    opacity: 0.5;
+  }
+  .guide-target {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 1;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.8));
+    animation: guidePulse 2s ease-in-out infinite;
+    transition: stroke 0.3s ease;
+  }
+  /* In Position: grün und ruhig */
+  .pose-guide.in-position .guide-target {
+    stroke: var(--success);
+    animation: none;
+  }
+  @keyframes guidePulse {
+    0%, 100% { r: 4; opacity: 0.9; }
+    50%      { r: 5; opacity: 0.5; }
+  }
+
+  /* ===== WELCOME VIEW (von dir selbst gebaut!) ===== */
+  #welcome-view {
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    gap: 24px;
+  }
+  #welcome-view h1 {
+    font-family: 'Anton', sans-serif;
+    font-size: 120px;
+    color: var(--accent);
+    letter-spacing: 4px;
+    margin: 0;
+  }
+  #start-go-btn {
+    font-size: 24px;
+    padding: 20px 60px;
+    border-radius: 999px;
+    flex: none;
+  }
+  #start-name {
+    padding: 16px 24px;
+    font-size: 18px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-3);
+    color: var(--fg);
+    text-align: center;
+    width: 80%;
+    max-width: 300px;
+  }
+
+  /* Position warning banner */
+  .position-warn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 61, 61, 0.92);
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 14px;
+    font-family: 'Anton', sans-serif;
+    font-size: 18px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    max-width: 85%;
+    display: none;
+    animation: warnPulse 1.4s ease-in-out infinite;
+  }
+  .position-warn.show { display: block; }
+  .position-warn small {
+    display: block;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    text-transform: none;
+    margin-top: 4px;
+    opacity: 0.9;
+  }
+  @keyframes warnPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+  }
+  .state-pill.locked { border-color: #555; color: #666; }
+
+  /* ===== ERINNERUNGS-BANNER (oben auf Startseite/Kamera) ===== */
+  .reminder-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin: 10px 14px 0 14px;
+    background: linear-gradient(90deg, rgba(212,255,0,0.15), rgba(212,255,0,0.05));
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    animation: reminderSlideIn 0.5s ease;
+  }
+  .reminder-banner.show { display: flex; }
+  .rb-icon { font-size: 22px; flex-shrink: 0; }
+  .rb-text {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    line-height: 1.3;
+  }
+  .rb-close {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 24px;
+    line-height: 1;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 50%;
+    transition: all 0.15s;
+  }
+  .rb-close:hover, .rb-close:active {
+    background: var(--bg-3);
+    color: var(--fg);
+  }
+  @keyframes reminderSlideIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== FORM-FEEDBACK (erscheint kurz nach jedem Rep) ===== */
+  .form-feedback {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(10,10,10,0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s, transform 0.3s;
+    max-width: 90%;
+    z-index: 5;
+  }
+  .form-feedback.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .form-feedback.good { border-color: var(--success); }
+  .form-feedback.okay { border-color: #ffbb00; }
+  .form-feedback.bad  { border-color: var(--danger); }
+  .form-feedback .fb-icon {
+    font-family: 'Anton', sans-serif;
+    font-size: 22px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .form-feedback.good .fb-icon { background: var(--success); color: #0a0a0a; }
+  .form-feedback.okay .fb-icon { background: #ffbb00; color: #0a0a0a; }
+  .form-feedback.bad  .fb-icon { background: var(--danger); color: #fff; }
+  .form-feedback .fb-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">PUSH<span>.</span></div>
+    <div class="header-right">
+      <div class="tagline">Liegestütze · Zähler</div>
+      <button class="settings-btn" id="settings-btn" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="reminder-banner" id="reminder-banner">
+    <span class="rb-icon">💪</span>
+    <span class="rb-text">Du hast heute noch nicht trainiert – Zeit für Liegestütze!</span>
+    <button class="rb-close" id="reminder-close" aria-label="Schließen">×</button>
+  </div>
+  <main>
+    <!-- CAMERA VIEW -->
+    <!-- WELCOME VIEW -->
+    <section class="view active" id="welcome-view">
+      <h1>Push.</h1>
+      <input type="text" id="start-name" placeholder="Dein Name">
+      <button id="start-go-btn" class="btn btn-primary">Start</button>
+    </section>
+
+    <!-- CAMERA VIEW -->
+    <section class="view" id="cam-view">
+      <div class="cam-wrap">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <div class="cam-overlay" id="overlay" style="display:none;">
+          <!-- Positionier-Hilfe: minimale Zielkreise für Schultern und Hände -->
+          <svg class="pose-guide" id="pose-guide" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <circle cx="30" cy="38" r="4" class="guide-target" />
+            <circle cx="70" cy="38" r="4" class="guide-target" />
+            <circle cx="25" cy="72" r="4" class="guide-target" />
+            <circle cx="75" cy="72" r="4" class="guide-target" />
+          </svg>
+
+          <div class="count-badge">
+            <div class="count-label">Wiederholungen</div>
+            <div class="count-value" id="count">0</div>
+          </div>
+          <div class="state-indicator">
+            <div class="state-pill" id="state-pill">Bereit</div>
+            <div class="angle-display" id="angle-display">--°</div>
+          </div>
+          <div class="position-warn" id="position-warn">Nicht in Position<small id="position-reason">Geh in die Liegestütz-Position</small></div>
+          <div class="form-feedback" id="form-feedback"></div>
+        </div>
+        <div class="cam-status" id="cam-status">
+          <h2>Kamera bereit?</h2>
+          <p>Tippe auf <b>Start</b> um die Kamera zu aktivieren.<br>Leg das Handy auf den Boden <b>vor dich</b>, sodass deine Schultern und Hände im Bild sind.</p>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="btn btn-primary" id="start-btn">Start</button>
+        <button class="btn btn-secondary" id="reset-btn" style="display:none;">↺</button>
+      </div>
+    </section>
+
+    <!-- STATS VIEW -->
+    <section class="view" id="stats-view">
+      <div class="stats-content">
+        <div class="stat-grid">
+          <div class="stat-card accent">
+            <div class="stat-label">Streak</div>
+            <div class="stat-value" id="stat-streak">0</div>
+            <div class="stat-sub">Tage in Folge</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Gesamt</div>
+            <div class="stat-value" id="stat-total">0</div>
+            <div class="stat-sub">Liegestütze insgesamt</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Rekord</div>
+            <div class="stat-value" id="stat-best">0</div>
+            <div class="stat-sub">Beste Session</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Heute</div>
+            <div class="stat-value" id="stat-today">0</div>
+            <div class="stat-sub">Liegestütze heute</div>
+          </div>
+        </div>
+
+        <div class="section-title">Tagesziel</div>
+        <div class="goal-card">
+          <div class="goal-header">
+            <div class="goal-title">Täglich <span id="goal-num">30</span> Liegestütze</div>
+            <button class="goal-edit" id="goal-edit-btn">Ändern</button>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="goal-fill" style="width:0%"></div></div>
+          <div class="progress-text">
+            <span id="goal-status">0 / 30</span>
+            <span id="goal-percent">0%</span>
+          </div>
+        </div>
+
+        <div class="section-title">Verlauf (letzte 14 Tage)</div>
+        <div class="chart-container"><canvas id="history-chart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- LEADERBOARD VIEW -->
+    <section class="view" id="board-view">
+      <div class="board-content">
+        <div class="board-notice">
+          <b>Bestenliste</b> – Beste Einzelsession aller Nutzer dieser App. Dein Name ist: <b id="username-display">—</b>
+          <button class="goal-edit" id="username-edit-btn" style="margin-top:8px;">Name ändern</button>
+        </div>
+        <div class="board-list" id="board-list">
+          <div class="empty-state">
+            <h3>Noch keine Einträge</h3>
+            <p>Absolviere dein erstes Training, um dich einzutragen.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GROUPS VIEW -->
+    <section class="view" id="groups-view">
+      <!-- Überblick: Liste meiner Gruppen -->
+      <div class="groups-content" id="groups-overview">
+        <div class="groups-header">
+          <h2 class="groups-title">👥 Gruppen</h2>
+          <p class="groups-subtitle">Battle dich mit deinen Freunden</p>
+        </div>
+
+        <div class="group-actions">
+          <button class="group-action-btn create" id="group-create-btn">
+            <span class="ga-icon">+</span>
+            <span class="ga-label">Gruppe erstellen</span>
+          </button>
+          <button class="group-action-btn join" id="group-join-btn">
+            <span class="ga-icon">→</span>
+            <span class="ga-label">Mit Code beitreten</span>
+          </button>
+        </div>
+
+        <div class="groups-list" id="groups-list">
+          <div class="empty-state">
+            <h3>Noch keine Gruppen</h3>
+            <p>Erstelle eine neue oder tritt einer bei.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail-Ansicht einer Gruppe -->
+      <div class="groups-content" id="group-detail" style="display:none;">
+        <button class="group-back-btn" id="group-back-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Zurück
+        </button>
+
+        <div class="group-detail-header">
+          <h2 class="group-detail-name" id="group-detail-name">—</h2>
+          <div class="group-detail-code" id="group-detail-code">——————</div>
+          <div class="group-detail-actions">
+            <button class="btn btn-primary" id="group-detail-copy" style="padding:10px 20px; font-size:13px;">Code teilen</button>
+            <button class="btn btn-secondary" id="group-detail-leave" style="padding:10px 20px; font-size:13px;">Verlassen</button>
+          </div>
+        </div>
+
+        <div class="section-title">Bestenliste</div>
+        <div class="board-list" id="group-detail-list">
+          <div class="empty-state">
+            <p>Lade...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav>
+    <button class="nav-btn active" data-view="cam-view">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Training
+    </button>
+    <button class="nav-btn" data-view="stats-view">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l-2 2m5 11V9m5 10v-6l2 2"/></svg>
+      Stats
+    </button>
+    <button class="nav-btn" data-view="board-view">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3h14a1 1 0 011 1v4a5 5 0 01-5 5H9a5 5 0 01-5-5V4a1 1 0 011-1zM12 13v4m-3 4h6"/></svg>
+      Bestenliste
+    </button>
+    <button class="nav-btn" data-view="groups-view">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H2v-2a4 4 0 014-4h1m10-4a4 4 0 11-8 0 4 4 0 018 0zM7 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Gruppen
+    </button>
+  </nav>
+</div>
+
+<!-- Modals -->
+<div class="modal-backdrop" id="group-create-modal">
+  <div class="modal">
+    <h2>GRUPPE ERSTELLEN</h2>
+    <p>Gib deiner Gruppe einen Namen. Du bekommst danach einen Code, den du mit Freunden teilen kannst.</p>
+    <input type="text" id="group-create-input" placeholder="z.B. Fitness-Crew" maxlength="30" />
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="group-create-cancel" style="flex:1;">Abbrechen</button>
+      <button class="btn btn-primary" id="group-create-save" style="flex:1;">Erstellen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="group-join-modal">
+  <div class="modal">
+    <h2>GRUPPE BEITRETEN</h2>
+    <p>Gib den 6-stelligen Code ein, den du von einem Freund bekommen hast.</p>
+    <input type="text" id="group-join-input" placeholder="z.B. ABC123" maxlength="6" style="text-align:center; font-family:'JetBrains Mono',monospace; font-size:22px; letter-spacing:4px; text-transform:uppercase;" />
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="group-join-cancel" style="flex:1;">Abbrechen</button>
+      <button class="btn btn-primary" id="group-join-save" style="flex:1;">Beitreten</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="group-code-modal">
+  <div class="modal">
+    <h2>GRUPPE ERSTELLT! 🎉</h2>
+    <p>Teile diesen Code mit deinen Freunden, damit sie beitreten können:</p>
+    <div class="group-code-display" id="group-code-display">——————</div>
+    <div class="modal-btns">
+      <button class="btn btn-primary" id="group-code-copy" style="flex:1;">Code kopieren</button>
+      <button class="btn btn-secondary" id="group-code-close" style="flex:1;">Schließen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="level-modal">
+  <div class="modal">
+    <h2>WÄHLE DEIN LEVEL</h2>
+    <p>Wie streng soll die App deine Form bewerten? Du kannst das jederzeit ändern.</p>
+    <div class="level-options">
+      <button class="level-option" data-level="beginner">
+        <span class="lvl-icon">🌱</span>
+        <span class="lvl-title">Anfänger</span>
+        <span class="lvl-desc">Locker – auch Knie-Liegestütze und flachere Reps zählen</span>
+      </button>
+      <button class="level-option" data-level="medium">
+        <span class="lvl-icon">💪</span>
+        <span class="lvl-title">Mittel</span>
+        <span class="lvl-desc">Ausgewogen – saubere Plank und normale Tiefe nötig</span>
+      </button>
+      <button class="level-option" data-level="pro">
+        <span class="lvl-icon">🔥</span>
+        <span class="lvl-title">Pro</span>
+        <span class="lvl-desc">Streng – nur perfekte Form wird gezählt</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="settings-modal">
+  <div class="modal">
+    <h2>EINSTELLUNGEN</h2>
+
+    <div class="settings-section">
+      <div class="settings-label">Name</div>
+      <p style="margin: 0 0 8px 0; font-size: 12px;">Aktuell: <b id="settings-current-name">—</b></p>
+      <input type="text" id="settings-name-input" placeholder="Neuer Name" maxlength="20" />
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Schwierigkeit</div>
+      <div class="settings-row" id="level-choices">
+        <button class="chip" data-level="beginner">🌱 Anfänger</button>
+        <button class="chip" data-level="medium">💪 Mittel</button>
+        <button class="chip" data-level="pro">🔥 Pro</button>
+      </div>
+      <p style="margin:8px 0 0 0; font-size:11px; color:var(--muted); line-height:1.4;">
+        Regelt, wie streng Position und Form bewertet werden.
+      </p>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Modus</div>
+      <div class="settings-row" id="theme-choices">
+        <button class="chip" data-theme="dark">🌙 Dunkel</button>
+        <button class="chip" data-theme="light">☀️ Hell</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Akzentfarbe</div>
+      <div class="settings-row" id="accent-choices">
+        <button class="color-dot" data-accent="yellow" style="background:#d4ff00;" aria-label="Gelb"></button>
+        <button class="color-dot" data-accent="blue"   style="background:#00d4ff;" aria-label="Blau"></button>
+        <button class="color-dot" data-accent="red"    style="background:#ff3d5c;" aria-label="Rot"></button>
+        <button class="color-dot" data-accent="purple" style="background:#c77dff;" aria-label="Lila"></button>
+        <button class="color-dot" data-accent="orange" style="background:#ff9500;" aria-label="Orange"></button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Schriftgröße</div>
+      <div class="settings-row" id="font-choices">
+        <button class="chip" data-font="normal">Aa Normal</button>
+        <button class="chip" data-font="large">Aa Groß</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-label">Erinnerungen</div>
+      <div class="settings-row" id="reminder-choices">
+        <button class="chip" data-reminder="on">🔔 An</button>
+        <button class="chip" data-reminder="off">🔕 Aus</button>
+      </div>
+      <p id="reminder-hint" style="margin:8px 0 0 0; font-size:11px; color:var(--muted); line-height:1.4;">
+        Zeigt beim App-Öffnen eine Erinnerung, wenn du heute noch nicht trainiert hast.
+      </p>
+    </div>
+
+    <div class="modal-btns" style="margin-top:18px;">
+      <button class="btn btn-secondary" id="settings-close" style="flex:1;">Schließen</button>
+      <button class="btn btn-primary" id="settings-save" style="flex:1;">Speichern</button>
+    </div>
+    <button class="btn btn-danger" id="settings-reset" style="width:100%; margin-top:12px; font-size:13px; padding:12px;">Namen zurücksetzen</button>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="name-modal">
+  <div class="modal">
+    <h2 id="name-modal-title">DEIN NAME</h2>
+    <p id="name-modal-text">Wie sollen dich andere in der Bestenliste sehen?</p>
+    <input type="text" id="name-input" placeholder="z.B. Max" maxlength="20" />
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="name-skip" style="flex:1;">Überspringen</button>
+      <button class="btn btn-primary" id="name-save" style="flex:1;">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="goal-modal">
+  <div class="modal">
+    <h2>TAGESZIEL</h2>
+    <p>Wie viele Liegestütze willst du täglich schaffen?</p>
+    <input type="number" id="goal-input" min="1" max="1000" />
+    <div class="modal-btns">
+      <button class="btn btn-secondary" id="goal-cancel" style="flex:1;">Abbrechen</button>
+      <button class="btn btn-primary" id="goal-save" style="flex:1;">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver, DrawingUtils }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+// ===== Firebase =====
+import { initializeApp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc,
+         updateDoc, deleteDoc, query, where, orderBy, limit,
+         onSnapshot, increment, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAY8h6NOfhIhd_LIk9RRF-MnUQ-X1NS6v0",
+  authDomain: "push-counter-71564.firebaseapp.com",
+  projectId: "push-counter-71564",
+  storageBucket: "push-counter-71564.firebasestorage.app",
+  messagingSenderId: "352234164040",
+  appId: "1:352234164040:web:2463fc1fc8a9fd129f2d7d"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const LB_COLLECTION = 'leaderboard';
+
+// Bestenliste live synchronisieren
+let cachedLeaderboard = [];
+let leaderboardListener = null;
+function startLeaderboardSync() {
+  if (leaderboardListener) return;
+  const q = query(collection(db, LB_COLLECTION), orderBy('score', 'desc'), limit(100));
+  leaderboardListener = onSnapshot(q, (snap) => {
+    cachedLeaderboard = snap.docs.map(d => d.data());
+    // Wenn Bestenliste gerade sichtbar ist, sofort neu rendern
+    if (document.getElementById('board-view').classList.contains('active')) {
+      updateBoardUI();
+    }
+  }, (err) => {
+    console.warn('Leaderboard sync failed', err);
+  });
+}
+
+// =========================================================
+// STATE
+// =========================================================
+const state = {
+  count: 0,
+  phase: 'up',            // 'up' | 'down'
+  angle: null,
+  running: false,
+  sessionStart: null,
+  username: 'Du',
+  dailyGoal: 30,
+  workouts: [],           // [{date: 'YYYY-MM-DD', count, duration}]
+  theme: 'dark',          // 'dark' | 'light'
+  accent: 'yellow',       // 'yellow' | 'blue' | 'red' | 'purple' | 'orange'
+  largeFont: false,
+  level: 'medium',        // 'beginner' | 'medium' | 'pro'
+  levelChosen: false,     // Wurde die Level-Auswahl beim ersten Besuch gezeigt?
+  myGroups: [],           // Array von Gruppen-IDs, in denen ich Mitglied bin
+  remindersOn: true,      // Erinnerungen beim App-Öffnen
+  reminderDismissedDate: null,  // Datum, an dem Erinnerung heute weggeklickt wurde
+  inPosition: false,
+  positionReason: '',
+  positionTip: '',
+  // Form-Tracking pro Rep
+  repMinAngle: 180,      // Tiefster erreichter Ellbogenwinkel in aktuellem Rep
+  repMaxAngle: 0,        // Höchster erreichter Winkel (Streckung)
+  repStartTime: 0,       // Wann der Rep begonnen hat (Runter-Phase)
+  repBodyLineDeviations: [],  // Werte der Körperlinien-Qualität
+  lastRepQuality: null,  // { rating: 'good'|'okay'|'bad', tip: '...' }
+  formStats: { good: 0, okay: 0, bad: 0 },   // Session-Statistik
+};
+
+const DOWN_THRESHOLD = 95;   // Grad - gebeugter Arm
+const UP_THRESHOLD = 155;    // Grad - gestreckter Arm
+
+// Level-abhängige Schwellwerte
+function getLevelThresholds() {
+  switch (state.level) {
+    case 'beginner':
+      return {
+        // Position (locker)
+        MAX_SHOULDER_TILT: 0.22,
+        MAX_WRIST_TILT: 0.28,
+        CENTER_TOLERANCE: 0.35,
+        // Plank-Check deaktiviert für Anfänger (auch Knie-Liegestütze erlaubt)
+        PLANK_CHECK_ON: false,
+        MIN_HIP_ABOVE_HANDS: 0.02,
+        MIN_KNEE_ABOVE_HANDS: 0.04,
+        // Form-Bewertung (großzügig)
+        DEPTH_OKAY: 125,     // über diesem Winkel: "etwas tiefer"
+        DEPTH_BAD: 140,      // über diesem Winkel: Warnung
+        EXTEND_OKAY: 140,    // unter diesem Winkel: "mehr strecken"
+        EXTEND_BAD: 130,
+        TEMPO_OKAY: 0.5,
+        TEMPO_BAD: 0.3,
+        BODY_OKAY: 25,
+        BODY_BAD: 35,
+      };
+    case 'pro':
+      return {
+        MAX_SHOULDER_TILT: 0.10,
+        MAX_WRIST_TILT: 0.15,
+        CENTER_TOLERANCE: 0.22,
+        PLANK_CHECK_ON: true,
+        MIN_HIP_ABOVE_HANDS: 0.08,
+        MIN_KNEE_ABOVE_HANDS: 0.12,
+        DEPTH_OKAY: 80,
+        DEPTH_BAD: 95,
+        EXTEND_OKAY: 165,
+        EXTEND_BAD: 158,
+        TEMPO_OKAY: 1.2,
+        TEMPO_BAD: 0.8,
+        BODY_OKAY: 12,
+        BODY_BAD: 18,
+      };
+    default:   // medium - die aktuellen Werte
+      return {
+        MAX_SHOULDER_TILT: 0.16,
+        MAX_WRIST_TILT: 0.22,
+        CENTER_TOLERANCE: 0.28,
+        PLANK_CHECK_ON: true,
+        MIN_HIP_ABOVE_HANDS: 0.04,
+        MIN_KNEE_ABOVE_HANDS: 0.06,
+        DEPTH_OKAY: 95,
+        DEPTH_BAD: 110,
+        EXTEND_OKAY: 155,
+        EXTEND_BAD: 145,
+        TEMPO_OKAY: 0.8,
+        TEMPO_BAD: 0.5,
+        BODY_OKAY: 18,
+        BODY_BAD: 25,
+      };
+  }
+}
+
+// Positions-Schwellwerte (Frontalperspektive: Kamera vor dir auf dem Boden)
+const MIN_VISIBILITY       = 0.5;
+const LOW_VISIBILITY       = 0.3;
+const MIN_WRIST_BELOW_SHLD = 0.02;
+const MIN_SHOULDER_WIDTH   = 0.10;
+const MAX_SHOULDER_WIDTH   = 0.75;
+
+function isInPushupPosition(lm) {
+  const T = getLevelThresholds();
+  const ls = lm[11], rs = lm[12];   // Schultern
+  const lw = lm[15], rw = lm[16];   // Handgelenke
+  const lh = lm[23], rh = lm[24];   // Hüften
+  const lk = lm[25], rk = lm[26];   // Knie
+  const la = lm[27], ra = lm[28];   // Knöchel
+
+  const lsV = ls.visibility ?? 0;
+  const rsV = rs.visibility ?? 0;
+  const lwV = lw.visibility ?? 0;
+  const rwV = rw.visibility ?? 0;
+  const lhV = lh.visibility ?? 0;
+  const rhV = rh.visibility ?? 0;
+  const lkV = lk.visibility ?? 0;
+  const rkV = rk.visibility ?? 0;
+  const laV = la.visibility ?? 0;
+  const raV = ra.visibility ?? 0;
+
+  // --- 1) Sichtbarkeits-Diagnose: Schultern ---
+  if (lsV < LOW_VISIBILITY && rsV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Schultern nicht sichtbar',
+             tip: 'Geh vor die Kamera und rutsche nach vorne' };
+  }
+  if (lsV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Rechte Schulter fehlt',
+             tip: 'Dreh dich etwas nach links zur Kamera' };
+  }
+  if (rsV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Linke Schulter fehlt',
+             tip: 'Dreh dich etwas nach rechts zur Kamera' };
+  }
+
+  // --- 2) Sichtbarkeits-Diagnose: Hände ---
+  if (lwV < LOW_VISIBILITY && rwV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Hände nicht im Bild',
+             tip: 'Leg das Handy näher an deine Hände' };
+  }
+  if (lwV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Rechte Hand fehlt',
+             tip: 'Bring deine rechte Hand ins Bild' };
+  }
+  if (rwV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Linke Hand fehlt',
+             tip: 'Bring deine linke Hand ins Bild' };
+  }
+
+  // --- 3) Sichtbarkeits-Diagnose: Hüfte (Beine sind nicht immer im Bild) ---
+  if (lhV < LOW_VISIBILITY && rhV < LOW_VISIBILITY) {
+    return { ok: false, reason: 'Hüfte nicht sichtbar',
+             tip: 'Rutsch etwas weiter weg, damit der Körper ins Bild passt' };
+  }
+
+  // --- 4) Abstand und Zentrierung ---
+  const shoulderWidth = Math.abs(ls.x - rs.x);
+  const centerXMirror = 1 - (ls.x + rs.x) / 2;
+
+  if (shoulderWidth > MAX_SHOULDER_WIDTH) {
+    return { ok: false, reason: 'Zu nah an der Kamera',
+             tip: 'Rutsch ein Stück nach hinten' };
+  }
+  if (shoulderWidth < MIN_SHOULDER_WIDTH) {
+    return { ok: false, reason: 'Zu weit weg',
+             tip: 'Komm näher an die Kamera heran' };
+  }
+  if (centerXMirror < 0.5 - T.CENTER_TOLERANCE) {
+    return { ok: false, reason: 'Nicht mittig im Bild',
+             tip: 'Bewege dich nach rechts' };
+  }
+  if (centerXMirror > 0.5 + T.CENTER_TOLERANCE) {
+    return { ok: false, reason: 'Nicht mittig im Bild',
+             tip: 'Bewege dich nach links' };
+  }
+
+  // --- 5) Körperausrichtung ---
+  const shoulderTilt = Math.abs(ls.y - rs.y);
+  if (shoulderTilt > T.MAX_SHOULDER_TILT) {
+    const tip = ls.y < rs.y
+      ? 'Deine linke Schulter hängt – stütz dich gleichmäßig ab'
+      : 'Deine rechte Schulter hängt – stütz dich gleichmäßig ab';
+    return { ok: false, reason: 'Schief zur Kamera', tip };
+  }
+
+  // --- 6) Hände am Boden ---
+  const leftDown  = lw.y > ls.y + MIN_WRIST_BELOW_SHLD;
+  const rightDown = rw.y > rs.y + MIN_WRIST_BELOW_SHLD;
+
+  if (!leftDown && !rightDown) {
+    return { ok: false, reason: 'Noch nicht in Liegestütz-Position',
+             tip: 'Beide Hände auf den Boden, Beine nach hinten' };
+  }
+  if (!leftDown) {
+    return { ok: false, reason: 'Rechte Hand nicht am Boden',
+             tip: 'Stütz dich mit beiden Händen gleich ab' };
+  }
+  if (!rightDown) {
+    return { ok: false, reason: 'Linke Hand nicht am Boden',
+             tip: 'Stütz dich mit beiden Händen gleich ab' };
+  }
+
+  const wristTilt = Math.abs(lw.y - rw.y);
+  if (wristTilt > T.MAX_WRIST_TILT) {
+    return { ok: false, reason: 'Hände unterschiedlich hoch',
+             tip: 'Beide Hände flach auf derselben Höhe' };
+  }
+
+  // --- 7) ECHTE PLANK: Hüfte und Knie müssen "angehoben" sein ---
+  // Wird bei Anfänger-Level übersprungen (Knie-Liegestütze erlaubt)
+  if (!T.PLANK_CHECK_ON) {
+    return { ok: true, reason: '', tip: '' };
+  }
+
+  const avgHandY = (lw.y + rw.y) / 2;
+  const hipY   = lhV > rhV ? lh.y : rh.y;
+  const kneeY  = lkV > rkV ? lk.y : rk.y;
+
+  // 7a) Hüfte: Darf NICHT am Boden sein
+  if (hipY > avgHandY - T.MIN_HIP_ABOVE_HANDS) {
+    return { ok: false, reason: 'Hüfte am Boden',
+             tip: 'Hebe deinen Po hoch – Körper gerade wie ein Brett' };
+  }
+
+  // 7b) Knie: Dürfen NICHT am Boden sein (nur prüfen wenn sichtbar)
+  if (lkV > LOW_VISIBILITY || rkV > LOW_VISIBILITY) {
+    if (kneeY > avgHandY - T.MIN_KNEE_ABOVE_HANDS) {
+      return { ok: false, reason: 'Knie am Boden',
+               tip: 'Keine Knie-Liegestütze – Beine strecken' };
+    }
+  }
+
+  return { ok: true, reason: '', tip: '' };
+}
+
+let poseLandmarker = null;
+let drawingUtils = null;
+let animationId = null;
+let lastVideoTime = -1;
+let chart = null;
+
+// =========================================================
+// STORAGE (hybrid: window.storage -> localStorage -> memory)
+// =========================================================
+const storage = (() => {
+  // 1) Claude Artefakt-Storage?
+  const hasClaudeStorage = typeof window !== 'undefined'
+    && window.storage
+    && typeof window.storage.get === 'function';
+
+  // 2) localStorage?
+  let hasLocal = false;
+  try {
+    const t = '__push_test__';
+    localStorage.setItem(t, '1');
+    localStorage.removeItem(t);
+    hasLocal = true;
+  } catch (e) { hasLocal = false; }
+
+  if (hasClaudeStorage) {
+    console.log('[PUSH] Storage: window.storage');
+    return {
+      async get(key)               { try { return await window.storage.get(key); } catch { return null; } },
+      async set(key, value)        { try { return await window.storage.set(key, value); } catch { return null; } },
+      async list(prefix, shared)   { try { return await window.storage.list(prefix, shared); } catch { return { keys: [] }; } },
+      async getShared(key)         { try { return await window.storage.get(key, true); } catch { return null; } },
+      async setShared(key, value)  { try { return await window.storage.set(key, value, true); } catch { return null; } },
+      async listShared(prefix)     { try { return await window.storage.list(prefix, true); } catch { return { keys: [] }; } },
+    };
+  } else if (hasLocal) {
+    console.log('[PUSH] Storage: localStorage');
+    const PFX = 'push:';
+    const PFX_S = 'push-shared:';
+    return {
+      async get(key)        { const v = localStorage.getItem(PFX + key); return v !== null ? { value: v } : null; },
+      async set(key, value) { localStorage.setItem(PFX + key, String(value)); return { value }; },
+      async list(prefix)    {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(PFX + (prefix || ''))) keys.push(k.slice(PFX.length));
+        }
+        return { keys };
+      },
+      async getShared(key)        { const v = localStorage.getItem(PFX_S + key); return v !== null ? { value: v } : null; },
+      async setShared(key, value) { localStorage.setItem(PFX_S + key, String(value)); return { value }; },
+      async listShared(prefix)    {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(PFX_S + (prefix || ''))) keys.push(k.slice(PFX_S.length));
+        }
+        return { keys };
+      },
+    };
+  } else {
+    console.log('[PUSH] Storage: memory (nicht persistent!)');
+    const mem = {}, memS = {};
+    return {
+      async get(key)        { return mem[key] !== undefined ? { value: mem[key] } : null; },
+      async set(key, value) { mem[key] = String(value); return { value }; },
+      async list(prefix)    { return { keys: Object.keys(mem).filter(k => k.startsWith(prefix || '')) }; },
+      async getShared(key)        { return memS[key] !== undefined ? { value: memS[key] } : null; },
+      async setShared(key, value) { memS[key] = String(value); return { value }; },
+      async listShared(prefix)    { return { keys: Object.keys(memS).filter(k => k.startsWith(prefix || '')) }; },
+    };
+  }
+})();
+
+async function loadData() {
+  try {
+    const d = await storage.get('pushup-data');
+    if (d) {
+      const parsed = JSON.parse(d.value);
+      state.username = parsed.username || 'Du';
+      state.dailyGoal = parsed.dailyGoal || 30;
+      state.workouts = parsed.workouts || [];
+      state.theme = parsed.theme || 'dark';
+      state.accent = parsed.accent || 'yellow';
+      state.largeFont = parsed.largeFont || false;
+      state.level = parsed.level || 'medium';
+      state.levelChosen = parsed.levelChosen || false;
+      state.myGroups = parsed.myGroups || [];
+      state.remindersOn = parsed.remindersOn !== undefined ? parsed.remindersOn : true;
+      state.reminderDismissedDate = parsed.reminderDismissedDate || null;
+    }
+  } catch (e) { console.warn('loadData failed', e); }
+}
+async function saveData() {
+  try {
+    await storage.set('pushup-data', JSON.stringify({
+      username: state.username,
+      dailyGoal: state.dailyGoal,
+      workouts: state.workouts,
+      theme: state.theme,
+      accent: state.accent,
+      largeFont: state.largeFont,
+      level: state.level,
+      levelChosen: state.levelChosen,
+      myGroups: state.myGroups,
+      remindersOn: state.remindersOn,
+      reminderDismissedDate: state.reminderDismissedDate,
+    }));
+  } catch (e) { console.warn('saveData failed', e); }
+}
+
+// Einstellungen auf die Seite anwenden
+function applyAppearance() {
+  document.body.dataset.theme = state.theme;
+  document.body.dataset.accent = state.accent;
+  document.body.classList.toggle('large-font', state.largeFont);
+}
+
+// Prüft ob heute schon trainiert wurde und zeigt ggf. eine Erinnerung
+async function checkReminderOnStartup() {
+  if (!state.remindersOn) return;
+
+  const today = todayStr();
+  // Bereits heute weggeklickt? Dann nicht nochmal nerven
+  if (state.reminderDismissedDate === today) return;
+
+  const trainedToday = countForDate(today);
+  if (trainedToday > 0) return;   // Heute schon trainiert -> keine Erinnerung
+
+  // 1) In-App Banner zeigen
+  const banner = document.getElementById('reminder-banner');
+  if (banner) banner.classList.add('show');
+
+  // 2) Zusätzlich System-Benachrichtigung versuchen
+  try {
+    if (!('Notification' in window)) return;
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+    if (permission === 'granted') {
+      new Notification('Push Counter 💪', {
+        body: 'Du hast heute noch nicht trainiert – Zeit für ein paar Liegestütze!',
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23d4ff00"/><text x="50" y="70" font-size="60" text-anchor="middle" font-family="Arial" font-weight="bold" fill="%230a0a0a">P.</text></svg>',
+        tag: 'daily-reminder-' + today,   // verhindert Duplikate
+      });
+    }
+  } catch (e) { console.warn('Notification failed', e); }
+}
+async function loadLeaderboard() {
+  // Primär aus dem Live-Cache (wird per onSnapshot aktuell gehalten)
+  if (cachedLeaderboard.length > 0) {
+    return cachedLeaderboard.slice(0, 100);
+  }
+  // Fallback: einmaliges Abrufen aus Firestore
+  try {
+    const q = query(collection(db, LB_COLLECTION), orderBy('score', 'desc'), limit(100));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    console.warn('loadLeaderboard failed', e);
+    return [];
+  }
+}
+async function saveLeaderboardEntry(name, score) {
+  try {
+    // Nutze den Namen als Dokument-ID (gesäubert), damit pro Nutzer nur 1 Eintrag existiert
+    const docId = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'anon';
+    const ref = doc(db, LB_COLLECTION, docId);
+
+    // Prüfen ob schon Eintrag existiert und dieser besser/gleich ist
+    try {
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const existing = snap.data();
+        if (existing.score >= score) return;   // Kein neuer Rekord
+      }
+    } catch (e) {}
+
+    await setDoc(ref, {
+      name: name,
+      score: score,
+      date: new Date().toISOString(),
+    });
+  } catch (e) { console.warn('leaderboard save failed', e); }
+}
+
+// =========================================================
+// GRUPPEN (Phase 2)
+// =========================================================
+const GROUPS_COLLECTION = 'groups';
+const MEMBERS_COLLECTION = 'groupMembers';
+
+// Generiert einen zufälligen 6-Zeichen-Code (ohne verwechselbare Zeichen)
+function generateGroupCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';  // kein 0/O, I/1
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+// Saubere Nutzer-ID aus Namen
+function getUserId() {
+  return state.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'anon';
+}
+
+// Neue Gruppe anlegen (probiert bis zu 5 Codes, falls Kollision)
+async function createGroup(groupName) {
+  const userId = getUserId();
+  let code = '';
+  let attempts = 0;
+  while (attempts < 5) {
+    code = generateGroupCode();
+    const ref = doc(db, GROUPS_COLLECTION, code);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) break;
+    attempts++;
+    if (attempts === 5) throw new Error('Konnte keinen freien Code finden');
+  }
+
+  // Gruppe anlegen
+  await setDoc(doc(db, GROUPS_COLLECTION, code), {
+    name: groupName,
+    createdBy: userId,
+    createdAt: new Date().toISOString(),
+    memberCount: 1,
+  });
+
+  // Mich als erstes Mitglied eintragen
+  const bestEver = state.workouts.reduce((m, w) => Math.max(m, w.count), 0);
+  await setDoc(doc(db, MEMBERS_COLLECTION, code + '_' + userId), {
+    groupId: code,
+    userId: userId,
+    name: state.username,
+    bestScore: bestEver,
+    joinedAt: new Date().toISOString(),
+    lastActive: new Date().toISOString(),
+  });
+
+  // Lokal merken
+  if (!state.myGroups.includes(code)) {
+    state.myGroups.push(code);
+    await saveData();
+  }
+
+  return code;
+}
+
+// Einer Gruppe per Code beitreten
+async function joinGroup(code) {
+  code = code.toUpperCase().trim();
+  if (code.length !== 6) throw new Error('Code muss 6 Zeichen lang sein');
+
+  const groupRef = doc(db, GROUPS_COLLECTION, code);
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) throw new Error('Gruppe nicht gefunden');
+
+  const userId = getUserId();
+  const memberRef = doc(db, MEMBERS_COLLECTION, code + '_' + userId);
+  const memberSnap = await getDoc(memberRef);
+
+  if (memberSnap.exists()) {
+    // Bin schon drin - trotzdem lokal merken
+    if (!state.myGroups.includes(code)) {
+      state.myGroups.push(code);
+      await saveData();
+    }
+    return { alreadyMember: true, groupName: groupSnap.data().name };
+  }
+
+  // Neu beitreten
+  const bestEver = state.workouts.reduce((m, w) => Math.max(m, w.count), 0);
+  await setDoc(memberRef, {
+    groupId: code,
+    userId: userId,
+    name: state.username,
+    bestScore: bestEver,
+    joinedAt: new Date().toISOString(),
+    lastActive: new Date().toISOString(),
+  });
+
+  // Mitgliederzähler erhöhen
+  await updateDoc(groupRef, {
+    memberCount: increment(1),
+  });
+
+  // Lokal merken
+  state.myGroups.push(code);
+  await saveData();
+
+  return { alreadyMember: false, groupName: groupSnap.data().name };
+}
+
+// Daten aller Gruppen laden, in denen ich bin
+async function loadMyGroups() {
+  const result = [];
+  for (const code of state.myGroups) {
+    try {
+      const snap = await getDoc(doc(db, GROUPS_COLLECTION, code));
+      if (snap.exists()) {
+        result.push({ id: code, ...snap.data() });
+      }
+    } catch (e) { console.warn('loadMyGroups error for', code, e); }
+  }
+  return result;
+}
+
+// Mitglieder einer Gruppe laden, sortiert nach Bestwert
+async function loadGroupMembers(groupId) {
+  try {
+    const q = query(
+      collection(db, MEMBERS_COLLECTION),
+      where('groupId', '==', groupId),
+      orderBy('bestScore', 'desc'),
+      limit(100)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => d.data());
+  } catch (e) {
+    console.warn('loadGroupMembers failed', e);
+    return [];
+  }
+}
+
+// Live-Listener für Mitglieder einer Gruppe (wird beim Schließen entfernt)
+let activeGroupListener = null;
+function subscribeToGroupMembers(groupId, onUpdate) {
+  if (activeGroupListener) activeGroupListener();
+  const q = query(
+    collection(db, MEMBERS_COLLECTION),
+    where('groupId', '==', groupId),
+    orderBy('bestScore', 'desc'),
+    limit(100)
+  );
+  activeGroupListener = onSnapshot(q, (snap) => {
+    onUpdate(snap.docs.map(d => d.data()));
+  }, (err) => console.warn('Group members sync failed', err));
+}
+function unsubscribeFromGroupMembers() {
+  if (activeGroupListener) {
+    activeGroupListener();
+    activeGroupListener = null;
+  }
+}
+
+// Eine Gruppe verlassen
+async function leaveGroup(groupId) {
+  const userId = getUserId();
+  // Mitglied löschen
+  try {
+    await deleteDoc(doc(db, MEMBERS_COLLECTION, groupId + '_' + userId));
+  } catch (e) { console.warn('leaveGroup member delete failed', e); }
+  // Mitgliederzähler verringern
+  try {
+    await updateDoc(doc(db, GROUPS_COLLECTION, groupId), {
+      memberCount: increment(-1),
+    });
+  } catch (e) {}
+  // Lokal entfernen
+  state.myGroups = state.myGroups.filter(g => g !== groupId);
+  await saveData();
+}
+
+// Aktualisiert den Score des Nutzers in allen seinen Gruppen
+// Wird nach jedem Training aufgerufen. Schreibt nur, wenn neuer Rekord.
+async function syncScoreToAllGroups(newBestScore) {
+  if (!state.myGroups || state.myGroups.length === 0) return;
+  const userId = getUserId();
+  const now = new Date().toISOString();
+
+  // Parallel in allen Gruppen aktualisieren
+  const updates = state.myGroups.map(async (groupId) => {
+    const memberRef = doc(db, MEMBERS_COLLECTION, groupId + '_' + userId);
+    try {
+      // Aktuellen Eintrag holen - nur überschreiben wenn neuer Score höher
+      const snap = await getDoc(memberRef);
+      if (!snap.exists()) {
+        // Eintrag existiert nicht mehr (wurde z.B. gelöscht) - überspringen
+        return;
+      }
+      const existing = snap.data();
+      if (existing.bestScore >= newBestScore) {
+        // Nur lastActive aktualisieren, Score bleibt
+        await updateDoc(memberRef, { lastActive: now });
+        return;
+      }
+      // Neuer Rekord - Score + lastActive schreiben
+      await updateDoc(memberRef, {
+        bestScore: newBestScore,
+        lastActive: now,
+      });
+    } catch (e) {
+      console.warn('syncScore failed for group', groupId, e);
+    }
+  });
+
+  await Promise.all(updates);
+}
+
+// =========================================================
+// MEDIAPIPE
+// =========================================================
+async function initPose() {
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO",
+    numPoses: 1,
+  });
+}
+
+// =========================================================
+// KAMERA
+// =========================================================
+async function startCamera() {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  document.getElementById('cam-status').innerHTML =
+    '<div class="loader"></div><h2>KI wird geladen...</h2><p>Einen Moment bitte.</p>';
+
+  try {
+    if (!poseLandmarker) await initPose();
+  } catch (e) {
+    document.getElementById('cam-status').innerHTML =
+      '<h2>Fehler</h2><p>KI-Modell konnte nicht geladen werden.<br>Bist du online?</p>';
+    return false;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await new Promise(r => video.addEventListener('loadeddata', r, { once: true }));
+    await video.play();
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    drawingUtils = new DrawingUtils(ctx);
+
+    document.getElementById('cam-status').style.display = 'none';
+    document.getElementById('overlay').style.display = 'flex';
+    state.sessionStart = Date.now();
+    state.running = true;
+    state.count = 0;
+    state.phase = 'up';
+    updateCountUI();
+    predictLoop();
+    return true;
+  } catch (e) {
+    document.getElementById('cam-status').innerHTML =
+      '<h2>Kamera blockiert</h2><p>Bitte gib der Seite Zugriff auf die Kamera und lade neu.</p>';
+    return false;
+  }
+}
+
+function stopCamera() {
+  state.running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  const video = document.getElementById('video');
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+}
+
+// =========================================================
+// ERKENNUNG
+// =========================================================
+function calcAngle(a, b, c) {
+  // Winkel bei Punkt b (Ellbogen)
+  const v1 = { x: a.x - b.x, y: a.y - b.y };
+  const v2 = { x: c.x - b.x, y: c.y - b.y };
+  const dot = v1.x * v2.x + v1.y * v2.y;
+  const m1 = Math.hypot(v1.x, v1.y);
+  const m2 = Math.hypot(v2.x, v2.y);
+  const cos = dot / (m1 * m2);
+  return Math.acos(Math.max(-1, Math.min(1, cos))) * 180 / Math.PI;
+}
+
+// Misst wie gerade die Körperlinie ist (Schulter - Hüfte - Knie)
+// Gibt Wert zwischen 0 (perfekt gerade) und ~50 (stark durchhängend/hoch) zurück
+// oder null wenn Landmarks nicht zuverlässig genug sind (z.B. bei weiter Kleidung)
+function measureBodyLineDeviation(lm) {
+  const ls = lm[11], rs = lm[12];
+  const lh = lm[23], rh = lm[24];
+  const lk = lm[25], rk = lm[26];
+  const shoulderVis = Math.max(ls.visibility ?? 0, rs.visibility ?? 0);
+  const hipVis = Math.max(lh.visibility ?? 0, rh.visibility ?? 0);
+  const kneeVis = Math.max(lk.visibility ?? 0, rk.visibility ?? 0);
+  // Strenger: Hüfte muss sehr gut sichtbar sein, sonst wird die Messung
+  // durch weite Kleidung (Pulli, Hoodie) zu ungenau
+  if (shoulderVis < 0.7 || hipVis < 0.75 || kneeVis < 0.5) return null;
+
+  const sy = (ls.y + rs.y) / 2;
+  const hy = (lh.y + rh.y) / 2;
+  const ky = (lk.y + rk.y) / 2;
+  const shoulderToHip = Math.abs(sy - hy);
+  const hipToKnee = Math.abs(hy - ky);
+  return (shoulderToHip + hipToKnee) * 100;
+}
+
+// Bewertet die Qualität eines Reps basierend auf gesammelten Metriken
+function evaluateRepForm({ minAngle, maxAngle, duration, bodyDeviations }) {
+  const T = getLevelThresholds();
+  const issues = [];
+
+  // 1) Tiefe
+  if (minAngle > T.DEPTH_BAD) {
+    issues.push({ severity: 2, tip: 'Geh tiefer runter – Brust näher zum Boden' });
+  } else if (minAngle > T.DEPTH_OKAY) {
+    issues.push({ severity: 1, tip: 'Etwas tiefer wäre besser' });
+  }
+
+  // 2) Streckung
+  if (maxAngle < T.EXTEND_BAD) {
+    issues.push({ severity: 2, tip: 'Drück dich ganz nach oben durch' });
+  } else if (maxAngle < T.EXTEND_OKAY) {
+    issues.push({ severity: 1, tip: 'Arme komplett strecken' });
+  }
+
+  // 3) Tempo
+  if (duration < T.TEMPO_BAD) {
+    issues.push({ severity: 2, tip: 'Langsamer! Kontrolliert runter' });
+  } else if (duration < T.TEMPO_OKAY) {
+    issues.push({ severity: 1, tip: 'Etwas langsamer für mehr Kontrolle' });
+  }
+
+  // 4) Körperlinie (nur bewerten, wenn genug zuverlässige Messungen vorliegen)
+  if (bodyDeviations.length >= 5) {
+    const sorted = [...bodyDeviations].sort((a,b) => a-b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    if (median > T.BODY_BAD) {
+      issues.push({ severity: 2, tip: 'Körper gerade halten – Bauch anspannen' });
+    } else if (median > T.BODY_OKAY) {
+      issues.push({ severity: 1, tip: 'Po leicht angespannt lassen' });
+    }
+  }
+
+  const maxSeverity = issues.reduce((m, i) => Math.max(m, i.severity), 0);
+  const rating = maxSeverity === 0 ? 'good' : (maxSeverity === 1 ? 'okay' : 'bad');
+  const worstIssue = issues.sort((a,b) => b.severity - a.severity)[0];
+  const tip = worstIssue ? worstIssue.tip : 'Saubere Form! Weiter so!';
+
+  return { rating, tip, issues };
+}
+
+async function predictLoop() {
+  if (!state.running) return;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (video.currentTime !== lastVideoTime && video.readyState >= 2) {
+    lastVideoTime = video.currentTime;
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    if (result.landmarks && result.landmarks.length > 0) {
+      const lm = result.landmarks[0];
+
+      // Positionsprüfung ZUERST
+      const pos = isInPushupPosition(lm);
+      state.inPosition = pos.ok;
+      state.positionReason = pos.reason;
+      state.positionTip = pos.tip;
+
+      // beide Arme messen, den sichtbareren nehmen
+      const leftAngle  = calcAngle(lm[11], lm[13], lm[15]);
+      const rightAngle = calcAngle(lm[12], lm[14], lm[16]);
+      const leftVis  = (lm[11].visibility + lm[13].visibility + lm[15].visibility) / 3;
+      const rightVis = (lm[12].visibility + lm[14].visibility + lm[16].visibility) / 3;
+      const angle = leftVis > rightVis ? leftAngle : rightAngle;
+      state.angle = angle;
+
+      // Rep-Logik NUR wenn in Position
+      if (state.inPosition) {
+        // === Form-Tracking während des Reps ===
+        if (state.phase === 'down') {
+          // In der Runter-Phase: tiefsten Winkel merken
+          if (angle < state.repMinAngle) state.repMinAngle = angle;
+          // Körperlinie: Abweichung Schulter-Hüfte-Knöchel messen
+          const bodyDev = measureBodyLineDeviation(lm);
+          if (bodyDev !== null) state.repBodyLineDeviations.push(bodyDev);
+        }
+        if (angle > state.repMaxAngle) state.repMaxAngle = angle;
+
+        if (state.phase === 'up' && angle < DOWN_THRESHOLD) {
+          // Rep-Start: Runter-Phase beginnt
+          state.phase = 'down';
+          state.repStartTime = performance.now();
+          state.repMinAngle = angle;
+          state.repBodyLineDeviations = [];
+        } else if (state.phase === 'down' && angle > UP_THRESHOLD) {
+          // Rep abgeschlossen - Form bewerten
+          state.phase = 'up';
+          const duration = (performance.now() - state.repStartTime) / 1000;
+          const quality = evaluateRepForm({
+            minAngle: state.repMinAngle,
+            maxAngle: angle,
+            duration: duration,
+            bodyDeviations: state.repBodyLineDeviations,
+          });
+          state.lastRepQuality = quality;
+          state.formStats[quality.rating]++;
+          state.count++;
+          updateCountUI(true);
+          showFormFeedback(quality);
+          beep();
+        }
+      } else {
+        // Aus Position -> Phase zurücksetzen, damit keine halben Reps zählen
+        state.phase = 'up';
+        state.repMinAngle = 180;
+        state.repBodyLineDeviations = [];
+      }
+
+      // zeichnen (die Landmarks auf dem gespiegelten Canvas)
+      const poseColor = state.inPosition ? '#d4ff00' : '#ff3d3d';
+      drawingUtils.drawLandmarks(lm, {
+        radius: (d) => DrawingUtils.lerp(d.from?.z || 0, -0.15, 0.1, 5, 1),
+        color: poseColor,
+      });
+      drawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
+        color: state.inPosition ? 'rgba(255,255,255,0.5)' : 'rgba(255,61,61,0.6)',
+        lineWidth: 2,
+      });
+    } else {
+      state.inPosition = false;
+      state.positionReason = 'Kein Körper erkannt';
+      state.positionTip = 'Geh in das Kamerabild';
+      state.phase = 'up';
+    }
+    ctx.restore();
+    updateStateUI();
+  }
+  animationId = requestAnimationFrame(predictLoop);
+}
+
+function beep() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.2, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.15);
+    osc.start(); osc.stop(ac.currentTime + 0.15);
+  } catch (e) {}
+}
+
+// Zeigt das Qualitäts-Feedback nach jedem Rep kurz im Overlay
+function showFormFeedback(quality) {
+  const el = document.getElementById('form-feedback');
+  if (!el) return;
+  el.classList.remove('good', 'okay', 'bad', 'show');
+  // Trigger reflow für Animation
+  void el.offsetWidth;
+  el.classList.add('show', quality.rating);
+  const icon = quality.rating === 'good' ? '✓' : (quality.rating === 'okay' ? '!' : '✗');
+  el.innerHTML = `<span class="fb-icon">${icon}</span><span class="fb-text">${quality.tip}</span>`;
+  // Nach 2.5s ausblenden
+  clearTimeout(el._hideTimer);
+  el._hideTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// =========================================================
+// UI UPDATES
+// =========================================================
+function updateCountUI(pulse = false) {
+  const el = document.getElementById('count');
+  el.textContent = state.count;
+  if (pulse) {
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
+  }
+}
+function updateStateUI() {
+  const pill = document.getElementById('state-pill');
+  const ang = document.getElementById('angle-display');
+  const warn = document.getElementById('position-warn');
+  const reason = document.getElementById('position-reason');
+  const guide = document.getElementById('pose-guide');
+
+  pill.classList.remove('up', 'down', 'locked');
+
+  if (!state.inPosition) {
+    pill.classList.add('locked');
+    pill.textContent = 'Gesperrt';
+    warn.classList.add('show');
+    guide.classList.remove('in-position');
+    // Hauptmeldung oben (in warn selbst), Tipp als kleine Zeile darunter
+    const mainMsg = state.positionReason || 'Nicht in Position';
+    const tipMsg  = state.positionTip || 'Geh in die Liegestütz-Position';
+    // Die Hauptüberschrift im warn-Banner aktualisieren
+    warn.childNodes[0].nodeValue = mainMsg;
+    reason.textContent = '👉 ' + tipMsg;
+  } else {
+    warn.classList.remove('show');
+    guide.classList.add('in-position');
+    if (state.phase === 'up') {
+      pill.classList.add('up');
+      pill.textContent = 'Hoch';
+    } else {
+      pill.classList.add('down');
+      pill.textContent = 'Runter';
+    }
+  }
+  ang.textContent = state.angle != null ? Math.round(state.angle) + '°' : '--°';
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function calcStreak() {
+  if (!state.workouts.length) return 0;
+  const days = new Set(state.workouts.map(w => w.date));
+  let streak = 0;
+  const d = new Date();
+  for (;;) {
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    if (days.has(key)) { streak++; d.setDate(d.getDate() - 1); }
+    else if (streak === 0 && key === todayStr()) { d.setDate(d.getDate() - 1); } // heute noch nicht trainiert - ok
+    else break;
+  }
+  return streak;
+}
+function countForDate(dateStr) {
+  return state.workouts.filter(w => w.date === dateStr).reduce((s,w) => s + w.count, 0);
+}
+function updateStatsUI() {
+  document.getElementById('stat-streak').textContent = calcStreak();
+  document.getElementById('stat-total').textContent = state.workouts.reduce((s,w) => s+w.count, 0);
+  document.getElementById('stat-best').textContent = state.workouts.reduce((m,w) => Math.max(m, w.count), 0);
+  const today = countForDate(todayStr());
+  document.getElementById('stat-today').textContent = today;
+
+  document.getElementById('goal-num').textContent = state.dailyGoal;
+  const pct = Math.min(100, Math.round(today / state.dailyGoal * 100));
+  document.getElementById('goal-fill').style.width = pct + '%';
+  document.getElementById('goal-status').textContent = today + ' / ' + state.dailyGoal;
+  document.getElementById('goal-percent').textContent = pct + '%';
+
+  drawChart();
+}
+function drawChart() {
+  const ctx = document.getElementById('history-chart');
+  const labels = [];
+  const data = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    labels.push(String(d.getDate()) + '.' + String(d.getMonth()+1) + '.');
+    data.push(countForDate(key));
+  }
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: 'rgba(212,255,0,0.8)',
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#888', font: { size: 9 } } },
+        y: { grid: { color: '#2a2a2a' }, ticks: { color: '#888', font: { size: 10 } }, beginAtZero: true },
+      },
+    },
+  });
+}
+async function updateBoardUI() {
+  const noName = !state.username || state.username === 'Du';
+  const usernameDisplay = document.getElementById('username-display');
+  const notice = document.querySelector('.board-notice');
+
+  if (noName) {
+    usernameDisplay.textContent = 'noch nicht gesetzt';
+    usernameDisplay.style.color = 'var(--danger)';
+    notice.style.borderLeftColor = 'var(--danger)';
+  } else {
+    usernameDisplay.textContent = state.username;
+    usernameDisplay.style.color = '';
+    notice.style.borderLeftColor = 'var(--accent)';
+  }
+
+  const list = document.getElementById('board-list');
+  const entries = await loadLeaderboard();
+  if (!entries.length) {
+    list.innerHTML = '<div class="empty-state"><h3>Noch keine Einträge</h3><p>Absolviere dein erstes Training, um dich einzutragen.</p></div>';
+    return;
+  }
+  list.innerHTML = entries.map((e, i) => `
+    <div class="board-entry ${e.name === state.username ? 'self' : ''}">
+      <div class="board-rank">${i+1}</div>
+      <div class="board-name">${escapeHtml(e.name)}${e.name === state.username ? '<span class="board-self-tag">Du</span>' : ''}</div>
+      <div class="board-score">${e.score}</div>
+    </div>
+  `).join('');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function updateGroupsUI() {
+  const list = document.getElementById('groups-list');
+  if (!state.myGroups || state.myGroups.length === 0) {
+    list.innerHTML = '<div class="empty-state"><h3>Noch keine Gruppen</h3><p>Erstelle eine neue oder tritt einer bei.</p></div>';
+    return;
+  }
+  list.innerHTML = '<div class="empty-state" style="padding:20px;"><p>Lade...</p></div>';
+  try {
+    const groups = await loadMyGroups();
+    if (groups.length === 0) {
+      list.innerHTML = '<div class="empty-state"><h3>Noch keine Gruppen</h3><p>Erstelle eine neue oder tritt einer bei.</p></div>';
+      return;
+    }
+    list.innerHTML = groups.map(g => `
+      <div class="group-card" data-group-id="${escapeHtml(g.id)}">
+        <div class="group-card-header">
+          <div class="group-card-name">${escapeHtml(g.name)}</div>
+          <div class="group-card-code">${escapeHtml(g.id)}</div>
+        </div>
+        <div class="group-card-meta">
+          <span>👥 ${g.memberCount || 0} Mitglied${g.memberCount === 1 ? '' : 'er'}</span>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.warn('updateGroupsUI failed', e);
+    list.innerHTML = '<div class="empty-state"><h3>Fehler beim Laden</h3><p>Versuche es später nochmal.</p></div>';
+  }
+}
+
+// State für die aktuell offene Detail-Ansicht
+let currentGroupId = null;
+let currentGroupName = '';
+
+async function openGroupDetail(groupId) {
+  // Erst Gruppen-Info holen
+  try {
+    const snap = await getDoc(doc(db, GROUPS_COLLECTION, groupId));
+    if (!snap.exists()) {
+      toast('Gruppe nicht mehr vorhanden');
+      return;
+    }
+    currentGroupId = groupId;
+    currentGroupName = snap.data().name;
+    document.getElementById('group-detail-name').textContent = currentGroupName;
+    document.getElementById('group-detail-code').textContent = groupId;
+  } catch (e) {
+    toast('Fehler beim Laden der Gruppe');
+    return;
+  }
+
+  // Views umschalten
+  document.getElementById('groups-overview').style.display = 'none';
+  document.getElementById('group-detail').style.display = 'block';
+
+  // Mitgliederliste initial leeren und Live-Listener starten
+  const list = document.getElementById('group-detail-list');
+  list.innerHTML = '<div class="empty-state" style="padding:20px;"><p>Lade Mitglieder...</p></div>';
+
+  subscribeToGroupMembers(groupId, (members) => {
+    renderGroupMembers(members);
+  });
+}
+
+function closeGroupDetail() {
+  unsubscribeFromGroupMembers();
+  currentGroupId = null;
+  document.getElementById('group-detail').style.display = 'none';
+  document.getElementById('groups-overview').style.display = 'block';
+  updateGroupsUI();   // Liste könnte aktualisiert sein
+}
+
+function renderGroupMembers(members) {
+  const list = document.getElementById('group-detail-list');
+  if (!members || members.length === 0) {
+    list.innerHTML = '<div class="empty-state"><p>Noch keine Mitglieder mit Score.</p></div>';
+    return;
+  }
+  const myUserId = getUserId();
+  list.innerHTML = members.map((m, i) => {
+    const activeLabel = formatLastActive(m.lastActive);
+    return `
+      <div class="board-entry ${m.userId === myUserId ? 'self' : ''}">
+        <div class="board-rank">${i+1}</div>
+        <div class="board-name">
+          ${escapeHtml(m.name)}${m.userId === myUserId ? '<span class="board-self-tag">Du</span>' : ''}
+          ${activeLabel ? `<div style="font-size:10px; color:var(--muted); margin-top:2px;">${activeLabel}</div>` : ''}
+        </div>
+        <div class="board-score">${m.bestScore || 0}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// "aktiv vor 2 Std", "heute aktiv", "3 Tage inaktiv"
+function formatLastActive(iso) {
+  if (!iso) return '';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  const diffHr = Math.round(diffMs / 3600000);
+  const diffDay = Math.round(diffMs / 86400000);
+  if (diffMin < 2) return 'gerade aktiv';
+  if (diffMin < 60) return 'aktiv vor ' + diffMin + ' Min';
+  if (diffHr < 24) return 'aktiv vor ' + diffHr + ' Std';
+  if (diffDay === 1) return 'gestern aktiv';
+  if (diffDay < 7) return diffDay + ' Tage inaktiv';
+  return '';
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// =========================================================
+// EVENTS
+// =========================================================
+
+// Startseite (von dir selbst gebaut!)
+const nameInput = document.getElementById('start-name');
+const goBtn = document.getElementById('start-go-btn');
+
+goBtn.addEventListener('click', async () => {
+  const name = nameInput.value.trim();
+
+  if (name === '') {
+    return;
+  }
+
+  state.username = name;
+  await saveData();
+
+  document.getElementById('welcome-view').classList.remove('active');
+  document.getElementById('cam-view').classList.add('active');
+
+  // Beim allerersten Mal das Level-Modal zeigen
+  if (!state.levelChosen) {
+    setTimeout(() => {
+      document.getElementById('level-modal').classList.add('active');
+    }, 400);
+  }
+});
+
+// Level-Auswahl beim ersten Besuch
+document.getElementById('level-modal').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.level-option');
+  if (!btn) return;
+  state.level = btn.dataset.level;
+  state.levelChosen = true;
+  await saveData();
+  document.getElementById('level-modal').classList.remove('active');
+  toast('Level gesetzt: ' + btn.querySelector('.lvl-title').textContent);
+});
+
+// === GRUPPEN-EVENTS ===
+
+// "Gruppe erstellen" Button öffnet Modal
+document.getElementById('group-create-btn').addEventListener('click', () => {
+  if (!state.username || state.username === 'Du') {
+    toast('Bitte erst einen Namen eingeben!');
+    return;
+  }
+  document.getElementById('group-create-input').value = '';
+  document.getElementById('group-create-modal').classList.add('active');
+});
+document.getElementById('group-create-cancel').addEventListener('click', () => {
+  document.getElementById('group-create-modal').classList.remove('active');
+});
+document.getElementById('group-create-save').addEventListener('click', async () => {
+  const name = document.getElementById('group-create-input').value.trim();
+  if (name.length < 2) { toast('Name zu kurz'); return; }
+  const saveBtn = document.getElementById('group-create-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Erstelle...';
+  try {
+    const code = await createGroup(name);
+    document.getElementById('group-create-modal').classList.remove('active');
+    document.getElementById('group-code-display').textContent = code;
+    document.getElementById('group-code-modal').classList.add('active');
+    updateGroupsUI();
+  } catch (e) {
+    toast('Fehler: ' + e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Erstellen';
+  }
+});
+
+// "Mit Code beitreten"
+document.getElementById('group-join-btn').addEventListener('click', () => {
+  if (!state.username || state.username === 'Du') {
+    toast('Bitte erst einen Namen eingeben!');
+    return;
+  }
+  document.getElementById('group-join-input').value = '';
+  document.getElementById('group-join-modal').classList.add('active');
+});
+document.getElementById('group-join-cancel').addEventListener('click', () => {
+  document.getElementById('group-join-modal').classList.remove('active');
+});
+document.getElementById('group-join-save').addEventListener('click', async () => {
+  const code = document.getElementById('group-join-input').value.trim().toUpperCase();
+  if (code.length !== 6) { toast('Code muss 6 Zeichen sein'); return; }
+  const saveBtn = document.getElementById('group-join-save');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Trete bei...';
+  try {
+    const result = await joinGroup(code);
+    document.getElementById('group-join-modal').classList.remove('active');
+    toast(result.alreadyMember
+      ? 'Du bist schon in "' + result.groupName + '"'
+      : 'Willkommen in "' + result.groupName + '"!');
+    updateGroupsUI();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Beitreten';
+  }
+});
+
+// Code-Anzeige-Modal
+document.getElementById('group-code-close').addEventListener('click', () => {
+  document.getElementById('group-code-modal').classList.remove('active');
+});
+document.getElementById('group-code-copy').addEventListener('click', async () => {
+  const code = document.getElementById('group-code-display').textContent;
+  try {
+    await navigator.clipboard.writeText(code);
+    toast('Code kopiert!');
+  } catch (e) {
+    toast('Code: ' + code);
+  }
+});
+
+// === GRUPPEN-DETAIL-EVENTS ===
+
+// Klick auf eine Gruppen-Karte öffnet die Detail-Ansicht
+document.getElementById('groups-list').addEventListener('click', (e) => {
+  const card = e.target.closest('.group-card');
+  if (!card) return;
+  const groupId = card.dataset.groupId;
+  if (groupId) openGroupDetail(groupId);
+});
+
+// Zurück-Button
+document.getElementById('group-back-btn').addEventListener('click', () => {
+  closeGroupDetail();
+});
+
+// Code teilen (Web-Share wenn möglich, sonst kopieren)
+document.getElementById('group-detail-copy').addEventListener('click', async () => {
+  if (!currentGroupId) return;
+  const shareText = `Tritt meiner Gruppe "${currentGroupName}" bei! Code: ${currentGroupId}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Push Counter Gruppe', text: shareText });
+    } else {
+      await navigator.clipboard.writeText(currentGroupId);
+      toast('Code kopiert: ' + currentGroupId);
+    }
+  } catch (e) {
+    // Nutzer hat abgebrochen oder Fehler
+  }
+});
+
+// Gruppe verlassen
+document.getElementById('group-detail-leave').addEventListener('click', async () => {
+  if (!currentGroupId) return;
+  if (!confirm('Möchtest du die Gruppe "' + currentGroupName + '" wirklich verlassen?')) return;
+  const groupIdToLeave = currentGroupId;
+  const btn = document.getElementById('group-detail-leave');
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    await leaveGroup(groupIdToLeave);
+    toast('Gruppe verlassen');
+    closeGroupDetail();
+  } catch (e) {
+    toast('Fehler beim Verlassen');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Verlassen';
+  }
+});
+
+// Wenn man weg vom Gruppen-Tab navigiert, Detail schließen
+document.querySelectorAll('.nav-btn').forEach(navBtn => {
+  navBtn.addEventListener('click', () => {
+    if (navBtn.dataset.view !== 'groups-view') {
+      if (currentGroupId) closeGroupDetail();
+    }
+  });
+});
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.view).classList.add('active');
+    if (btn.dataset.view === 'stats-view') updateStatsUI();
+    if (btn.dataset.view === 'board-view') updateBoardUI();
+    if (btn.dataset.view === 'groups-view') updateGroupsUI();
+  });
+});
+
+document.getElementById('start-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('start-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  if (!state.running) {
+    btn.disabled = true;
+    btn.textContent = 'Lade...';
+    const ok = await startCamera();
+    btn.disabled = false;
+    if (ok) {
+      btn.textContent = 'Beenden';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-danger');
+      resetBtn.style.display = 'block';
+    } else {
+      btn.textContent = 'Start';
+    }
+  } else {
+    // Beenden = Session speichern
+    stopCamera();
+    await clearOngoingSession();  // Zwischenstand löschen
+    if (state.count > 0) {
+      const duration = Math.round((Date.now() - state.sessionStart) / 1000);
+      state.workouts.push({ date: todayStr(), count: state.count, duration });
+      // Erinnerungs-Banner ausblenden, da heute ja trainiert wurde
+      document.getElementById('reminder-banner').classList.remove('show');
+      await saveData();
+      if (state.username && state.username !== 'Du') {
+        const bestEver = state.workouts.reduce((m,w) => Math.max(m, w.count), 0);
+        await saveLeaderboardEntry(state.username, bestEver);
+        await syncScoreToAllGroups(bestEver);
+        toast(state.count + ' Liegestütze gespeichert!');
+      } else {
+        // Kein Name gesetzt -> jetzt fragen, damit Eintrag in Bestenliste landet
+        toast(state.count + ' Liegestütze gespeichert!');
+        setTimeout(() => openNameModal(true), 600);
+      }
+      // Bestenliste aktualisieren, falls gerade geöffnet
+      updateBoardUI();
+    }
+    btn.textContent = 'Start';
+    btn.classList.add('btn-primary');
+    btn.classList.remove('btn-danger');
+    resetBtn.style.display = 'none';
+    document.getElementById('overlay').style.display = 'none';
+    document.getElementById('cam-status').style.display = 'block';
+
+    // Zusammenfassung mit Form-Statistik
+    const fs = state.formStats;
+    const totalReps = fs.good + fs.okay + fs.bad;
+    let summary = '<h2>Gut gemacht!</h2>';
+    if (totalReps > 0) {
+      const goodPct = Math.round(fs.good / totalReps * 100);
+      let formText = '';
+      if (goodPct >= 80) {
+        formText = `🏆 Top Form! ${fs.good} von ${totalReps} perfekt.`;
+      } else if (goodPct >= 50) {
+        formText = `💪 Solide! ${fs.good} gut, ${fs.okay} okay, ${fs.bad} verbesserbar.`;
+      } else {
+        formText = `📈 ${fs.good} gut, ${fs.okay} okay, ${fs.bad} verbesserbar. Qualität vor Quantität!`;
+      }
+      summary += `<p style="margin-bottom:10px;">${formText}</p>`;
+      summary += '<p style="font-size:13px; color:var(--muted);">Noch eine Runde? Tippe <b>Start</b>.</p>';
+    } else {
+      summary += '<p>Noch eine Runde? Leg das Handy wieder vor dich und tippe <b>Start</b>.</p>';
+    }
+    document.getElementById('cam-status').innerHTML = summary;
+
+    // Form-Stats für nächste Session zurücksetzen
+    state.formStats = { good: 0, okay: 0, bad: 0 };
+  }
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  state.count = 0;
+  state.phase = 'up';
+  updateCountUI();
+  toast('Zähler zurückgesetzt');
+});
+
+// Username Modal
+function openNameModal(afterWorkout = false) {
+  const titleEl = document.getElementById('name-modal-title');
+  const textEl  = document.getElementById('name-modal-text');
+  if (afterWorkout) {
+    titleEl.textContent = 'GLÜCKWUNSCH!';
+    textEl.textContent  = 'Gib deinen Namen ein, um dich in die Bestenliste einzutragen.';
+  } else {
+    titleEl.textContent = 'DEIN NAME';
+    textEl.textContent  = 'Wie sollen dich andere in der Bestenliste sehen?';
+  }
+  document.getElementById('name-input').value = state.username === 'Du' ? '' : state.username;
+  document.getElementById('name-modal').classList.add('active');
+}
+
+document.getElementById('username-edit-btn').addEventListener('click', () => openNameModal(false));
+
+document.getElementById('name-save').addEventListener('click', async () => {
+  const v = document.getElementById('name-input').value.trim();
+  if (v) {
+    state.username = v;
+    await saveData();
+    // bestehenden Rekord unter neuem Namen eintragen
+    const bestEver = state.workouts.reduce((m,w) => Math.max(m, w.count), 0);
+    if (bestEver > 0) {
+      await saveLeaderboardEntry(state.username, bestEver);
+      await syncScoreToAllGroups(bestEver);
+      toast('Eingetragen in Bestenliste!');
+    }
+    updateBoardUI();
+  }
+  document.getElementById('name-modal').classList.remove('active');
+});
+document.getElementById('name-skip').addEventListener('click', () => {
+  document.getElementById('name-modal').classList.remove('active');
+});
+
+// Goal Modal
+document.getElementById('goal-edit-btn').addEventListener('click', () => {
+  document.getElementById('goal-input').value = state.dailyGoal;
+  document.getElementById('goal-modal').classList.add('active');
+});
+document.getElementById('goal-save').addEventListener('click', async () => {
+  const v = parseInt(document.getElementById('goal-input').value, 10);
+  if (v > 0 && v < 10000) {
+    state.dailyGoal = v;
+    await saveData();
+    updateStatsUI();
+  }
+  document.getElementById('goal-modal').classList.remove('active');
+});
+document.getElementById('goal-cancel').addEventListener('click', () => {
+  document.getElementById('goal-modal').classList.remove('active');
+});
+
+// Einstellungs-Zahnrad
+const settingsBtn = document.getElementById('settings-btn');
+const settingsModal = document.getElementById('settings-modal');
+const settingsNameInput = document.getElementById('settings-name-input');
+
+settingsBtn.addEventListener('click', () => {
+  // Aktuellen Namen anzeigen
+  const currentName = (state.username && state.username !== 'Du') ? state.username : 'noch nicht gesetzt';
+  document.getElementById('settings-current-name').textContent = currentName;
+  // Feld leer, bereit für neuen Namen
+  settingsNameInput.value = '';
+
+  // Aktive Auswahl in jeder Gruppe markieren
+  markActiveChoice('level-choices', 'level', state.level);
+  markActiveChoice('theme-choices', 'theme', state.theme);
+  markActiveChoice('accent-choices', 'accent', state.accent);
+  markActiveChoice('font-choices', 'font', state.largeFont ? 'large' : 'normal');
+  markActiveChoice('reminder-choices', 'reminder', state.remindersOn ? 'on' : 'off');
+
+  settingsModal.classList.add('active');
+});
+
+// Hilfsfunktion: markiert in einer Gruppe den Button mit dem passenden data-Attribut
+function markActiveChoice(groupId, attrName, currentValue) {
+  const group = document.getElementById(groupId);
+  group.querySelectorAll('button').forEach(btn => {
+    const isActive = btn.dataset[attrName] === currentValue;
+    btn.classList.toggle('active', isActive);
+  });
+}
+
+// Theme-Auswahl: Klick sofort anwenden + merken
+document.getElementById('theme-choices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.theme = btn.dataset.theme;
+  applyAppearance();
+  markActiveChoice('theme-choices', 'theme', state.theme);
+  await saveData();
+});
+
+// Akzentfarbe: Klick sofort anwenden + merken
+document.getElementById('accent-choices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.accent = btn.dataset.accent;
+  applyAppearance();
+  markActiveChoice('accent-choices', 'accent', state.accent);
+  await saveData();
+});
+
+// Schriftgröße: Klick sofort anwenden + merken
+document.getElementById('font-choices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.largeFont = btn.dataset.font === 'large';
+  applyAppearance();
+  markActiveChoice('font-choices', 'font', state.largeFont ? 'large' : 'normal');
+  await saveData();
+});
+
+// Schwierigkeitsstufe
+document.getElementById('level-choices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.level = btn.dataset.level;
+  markActiveChoice('level-choices', 'level', state.level);
+  await saveData();
+});
+
+// Erinnerungen an/aus
+document.getElementById('reminder-choices').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const turningOn = btn.dataset.reminder === 'on';
+  state.remindersOn = turningOn;
+  markActiveChoice('reminder-choices', 'reminder', turningOn ? 'on' : 'off');
+  // Beim Einschalten direkt die System-Berechtigung anfragen
+  if (turningOn && 'Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch(e) {}
+  }
+  await saveData();
+});
+
+// Banner schließen (nur für heute ausblenden)
+document.getElementById('reminder-close').addEventListener('click', async () => {
+  document.getElementById('reminder-banner').classList.remove('show');
+  state.reminderDismissedDate = todayStr();
+  await saveData();
+});
+
+document.getElementById('settings-close').addEventListener('click', () => {
+  settingsModal.classList.remove('active');
+});
+
+document.getElementById('settings-save').addEventListener('click', async () => {
+  const newName = settingsNameInput.value.trim();
+  if (newName === '') return;
+
+  state.username = newName;
+  await saveData();
+
+  // Besten Score unter neuem Namen in Bestenliste eintragen
+  const bestEver = state.workouts.reduce((m, w) => Math.max(m, w.count), 0);
+  if (bestEver > 0) {
+    await saveLeaderboardEntry(state.username, bestEver);
+  }
+
+  updateBoardUI();
+  settingsModal.classList.remove('active');
+  toast('Name geändert: ' + newName);
+});
+
+document.getElementById('settings-reset').addEventListener('click', async () => {
+  if (!confirm('Möchtest du zurück zur Startseite und deinen Namen neu eingeben?')) return;
+
+  state.username = 'Du';
+  await saveData();
+
+  // Alle Views ausblenden, nur Startseite anzeigen
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('welcome-view').classList.add('active');
+
+  // Navigation zurück auf Training-Tab
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav-btn[data-view="cam-view"]').classList.add('active');
+
+  // Input-Feld leeren
+  document.getElementById('start-name').value = '';
+
+  settingsModal.classList.remove('active');
+});
+
+// =========================================================
+// INIT
+// =========================================================
+// Sichert laufende Sessions als Zwischenstand (separater Key, kein Workout-Eintrag)
+// Wenn die App wiederkommt, wird der Zwischenstand geladen und kann fortgesetzt werden.
+async function persistOngoingSession() {
+  if (state.running && state.count > 0) {
+    try {
+      await storage.set('ongoing-session', JSON.stringify({
+        count: state.count,
+        phase: state.phase,
+        sessionStart: state.sessionStart,
+        savedAt: Date.now(),
+      }));
+    } catch (e) {}
+  }
+}
+async function clearOngoingSession() {
+  try { await storage.set('ongoing-session', ''); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') persistOngoingSession();
+});
+window.addEventListener('pagehide', persistOngoingSession);
+
+async function checkOngoingSession() {
+  try {
+    const s = await storage.get('ongoing-session');
+    if (!s || !s.value) return;
+    const data = JSON.parse(s.value);
+    // Nur fortsetzen, wenn die Unterbrechung max. 2 Stunden her ist
+    if (Date.now() - data.savedAt > 2 * 60 * 60 * 1000) {
+      await clearOngoingSession();
+      return;
+    }
+    // Dem Nutzer anbieten, fortzusetzen
+    if (confirm(`Du hattest eine unbeendete Session mit ${data.count} Liegestützen. Fortsetzen?`)) {
+      state.count = data.count;
+      state.phase = data.phase || 'up';
+      state.sessionStart = data.sessionStart || Date.now();
+      toast('Fortgesetzt bei ' + data.count);
+    } else {
+      await clearOngoingSession();
+    }
+  } catch (e) {}
+}
+
+(async () => {
+  await loadData();
+  applyAppearance();
+  startLeaderboardSync();
+
+  // Wenn schon ein Name gespeichert ist -> Startseite überspringen
+  if (state.username && state.username !== 'Du') {
+    document.getElementById('welcome-view').classList.remove('active');
+    document.getElementById('cam-view').classList.add('active');
+  }
+
+  document.getElementById('goal-num').textContent = state.dailyGoal;
+  updateStatsUI();
+  await checkOngoingSession();
+  await checkReminderOnStartup();
+})();
+</script>
+</body>
+</html>
